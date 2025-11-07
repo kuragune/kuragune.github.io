@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hash con símbolos y copiar solo hash</title>
+<style>
+body{
+  background:#0f1724;
+  color:#e6eef6;
+  font-family:sans-serif;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:100vh;
+  margin:0;
+}
+.box{
+  background:#182235;
+  padding:20px;
+  border-radius:10px;
+  width:90%;
+  max-width:600px;
+  box-shadow:0 0 10px rgba(0,0,0,0.4);
+}
+textarea,select,button{
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  border:none;
+  border-radius:5px;
+  font-size:14px;
+  outline:none;
+}
+button{
+  background:#06b6d4;
+  color:white;
+  font-weight:bold;
+  cursor:pointer;
+  transition:background 0.2s;
+}
+button:hover{background:#0891b2;}
+.output{
+  background:#0b1220;
+  margin-top:12px;
+  padding:10px;
+  border-radius:5px;
+  font-family:monospace;
+  font-size:13px;
+  word-wrap:break-word;
+}
+.copy-btn{
+  background:#1f2d44;
+  color:#06b6d4;
+  border:none;
+  margin-top:8px;
+  padding:8px 12px;
+  border-radius:5px;
+  font-weight:bold;
+  cursor:pointer;
+  width:auto;
+}
+.copy-btn:hover{
+  background:#253754;
+}
+.small{
+  font-size:12px;
+  color:#8ca3c1;
+  margin-top:4px;
+}
+</style>
+</head>
+<body>
+  <div class="box">
+    <!--<h2>Hash (3 pasadas + símbolos)</h2>-->
+    <textarea id="input" placeholder="Insert..."></textarea>
+    <select id="algo" hidden>
+      <option value="SHA-1">SHA-1</option>
+      <option value="SHA-256" selected>SHA-256</option>
+      <option value="SHA-384">SHA-384</option>
+      <option value="SHA-512">SHA-512</option>
+    </select>
+    <button id="generate">Hx</button>
+    <div class="output" id="output"></div>
+    <div class="small" id="info"></div>
+    <button id="copy" class="copy-btn">📋 Copiar</button>
+  </div>
+
+<script>
+const inputEl=document.getElementById('input');
+const algoEl=document.getElementById('algo');
+const outputEl=document.getElementById('output');
+const infoEl=document.getElementById('info');
+const genBtn=document.getElementById('generate');
+const copyBtn=document.getElementById('copy');
+
+// Funciones para hashing
+function encodeUTF8(str){return new TextEncoder().encode(str);}
+async function hashOnce(alg,data){return crypto.subtle.digest(alg,data);}
+async function hashThreeTimes(alg,text){
+  let data=encodeUTF8(text);
+  for(let i=0;i<3;i++){
+    data=await hashOnce(alg,data);
+    data=new Uint8Array(data);
+  }
+  return data;
+}
+
+// Tabla de símbolos personalizados
+const SYMBOLS="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{};:,.?/|<>~";
+
+function bufferToSymbols(buffer){
+  const bytes=new Uint8Array(buffer);
+  let out="";
+  for(const b of bytes){
+    out += SYMBOLS[b % SYMBOLS.length];
+  }
+  return out;
+}
+
+// Generar hash
+let lastHash="";
+genBtn.addEventListener('click',async()=>{
+  const text=inputEl.value.trim();
+  if(!text){outputEl.textContent="(Escribe algo primero)";return;}
+  const alg=algoEl.value;
+  try{
+    const start=performance.now();
+    const hashed=await hashThreeTimes(alg,text);
+    var hashSymbolic=bufferToSymbols(hashed);
+	hashSymbolic = hashSymbolic.slice(0, 16);
+    const elapsed=(performance.now()-start).toFixed(2);
+    outputEl.textContent=hashSymbolic;
+    //infoEl.textContent=`${alg}, 3x con símbolos — ${elapsed} ms`;
+    lastHash=hashSymbolic;
+  }catch(e){
+    outputEl.textContent="Error: "+e.message;
+    infoEl.textContent="";
+  }
+});
+
+// Copiar solo el hash
+copyBtn.addEventListener('click', async () => {
+  if (!lastHash) return;
+  try {
+    await navigator.clipboard.writeText(lastHash);
+    copyBtn.textContent = "✅ Copiado";
+    setTimeout(()=>copyBtn.textContent="📋 Copiar solo hash",1500);
+  } catch {
+    const temp=document.createElement("textarea");
+    temp.value=lastHash;
+    document.body.appendChild(temp);
+    temp.select();
+    document.execCommand("copy");
+    temp.remove();
+    copyBtn.textContent = "✅ Copiado";
+    setTimeout(()=>copyBtn.textContent="📋 Copiar solo hash",1500);
+  }
+});
+</script>
+</body>
+</html>
