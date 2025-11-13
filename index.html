@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hash con símbolos y copiar solo hash</title>
+<title>Hx</title>
 <style>
 body{
   background:#0f1724;
@@ -49,7 +49,7 @@ button:hover{background:#0891b2;}
   font-size:13px;
   word-wrap:break-word;
 }
-.copy-btn{
+.copy-btn, .log-btn, .save-btn{
   background:#1f2d44;
   color:#06b6d4;
   border:none;
@@ -60,7 +60,7 @@ button:hover{background:#0891b2;}
   cursor:pointer;
   width:auto;
 }
-.copy-btn:hover{
+.copy-btn:hover, .log-btn:hover, .save-btn:hover{
   background:#253754;
 }
 .small{
@@ -68,84 +68,120 @@ button:hover{background:#0891b2;}
   color:#8ca3c1;
   margin-top:4px;
 }
+#log{
+  margin-top:10px;
+  background:#0b1220;
+  border-radius:5px;
+  padding:10px;
+  max-height:150px;
+  overflow-y:auto;
+  font-family:monospace;
+  font-size:12px;
+}
 </style>
 </head>
 <body>
   <div class="box">
-    <!--<h2>Hash (3 pasadas + símbolos)</h2>-->
-    <textarea id="input" placeholder="Insert..."></textarea>
-    <select id="algo" hidden>
-      <option value="SHA-1">SHA-1</option>
-      <option value="SHA-256" selected>SHA-256</option>
-      <option value="SHA-384">SHA-384</option>
-      <option value="SHA-512">SHA-512</option>
+    <textarea id="input" placeholder="Texto..."></textarea>
+    <select id="length">
+      <option value="8">8</option>
+      <option value="16" selected>16</option>
+      <option value="24">24</option>
+      <option value="32">32</option>
+      <option value="0">∞</option>
     </select>
     <button id="generate">Hx</button>
     <div class="output" id="output"></div>
     <div class="small" id="info"></div>
-    <button id="copy" class="copy-btn">📋 Copiar</button>
+    <button id="copy" class="copy-btn">📋</button>
+    <button id="save" class="save-btn">➕ Guardar</button>
+    <button id="showLog" class="log-btn">🧾 Ver log</button>
+    <button id="clearLog" class="log-btn">🗑️ Limpiar log</button>
+    <button id="exportLog" class="log-btn">💾 Exportar log</button>
+    <div id="log" hidden></div>
   </div>
 
 <script>
 const inputEl=document.getElementById('input');
-const algoEl=document.getElementById('algo');
 const outputEl=document.getElementById('output');
 const infoEl=document.getElementById('info');
 const genBtn=document.getElementById('generate');
 const copyBtn=document.getElementById('copy');
+const saveBtn=document.getElementById('save');
+const lengthEl=document.getElementById('length');
+const showLogBtn=document.getElementById('showLog');
+const clearLogBtn=document.getElementById('clearLog');
+const exportLogBtn=document.getElementById('exportLog');
+const logEl=document.getElementById('log');
 
-// Funciones para hashing
+// Cargar historial del almacenamiento local
+let history = JSON.parse(localStorage.getItem("hashLog") || "[]");
+
+// Funciones de hashing
 function encodeUTF8(str){return new TextEncoder().encode(str);}
-async function hashOnce(alg,data){return crypto.subtle.digest(alg,data);}
-async function hashThreeTimes(alg,text){
+async function hashOnce(data){return crypto.subtle.digest("SHA-512",data);}
+async function hashThreeTimes(text){
   let data=encodeUTF8(text);
   for(let i=0;i<3;i++){
-    data=await hashOnce(alg,data);
+    data=await hashOnce(data);
     data=new Uint8Array(data);
   }
   return data;
 }
 
-// Tabla de símbolos personalizados
+// Símbolos personalizados
 const SYMBOLS="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{};:,.?/|<>~";
-
 function bufferToSymbols(buffer){
   const bytes=new Uint8Array(buffer);
   let out="";
-  for(const b of bytes){
-    out += SYMBOLS[b % SYMBOLS.length];
-  }
+  for(const b of bytes){ out += SYMBOLS[b % SYMBOLS.length]; }
   return out;
 }
 
+// Guardar historial en localStorage
+function saveHistory() {
+  localStorage.setItem("hashLog", JSON.stringify(history));
+}
+
+// Mostrar historial
+function renderHistory() {
+  if (history.length === 0) {
+    logEl.innerHTML = "(sin registros)";
+    return;
+  }
+  logEl.innerHTML = history.map(h => `${h.input} → ${h.output}`).join('<br>');
+}
+
 // Generar hash
-let lastHash="";
+let lastHash="", lastInput="";
 genBtn.addEventListener('click',async()=>{
   const text=inputEl.value.trim();
-  if(!text){outputEl.textContent="(Escribe algo primero)";return;}
-  const alg=algoEl.value;
+  if(!text){outputEl.textContent="(vacío)";return;}
+
+  const cutLength=parseInt(lengthEl.value);
   try{
     const start=performance.now();
-    const hashed=await hashThreeTimes(alg,text);
-    var hashSymbolic=bufferToSymbols(hashed);
-	hashSymbolic = hashSymbolic.slice(0, 16);
-    const elapsed=(performance.now()-start).toFixed(2);
+    const hashed=await hashThreeTimes(text);
+    let hashSymbolic=bufferToSymbols(hashed);
+    if(cutLength>0) hashSymbolic = hashSymbolic.slice(0, cutLength);
+    const elapsed=(performance.now()-start).toFixed(1);
     outputEl.textContent=hashSymbolic;
-    //infoEl.textContent=`${alg}, 3x con símbolos — ${elapsed} ms`;
+    infoEl.textContent=`${cutLength>0?cutLength:'∞'} • ${elapsed}ms`;
     lastHash=hashSymbolic;
+    lastInput=text;
   }catch(e){
-    outputEl.textContent="Error: "+e.message;
+    outputEl.textContent="Error";
     infoEl.textContent="";
   }
 });
 
-// Copiar solo el hash
+// 📋 Copiar hash
 copyBtn.addEventListener('click', async () => {
   if (!lastHash) return;
   try {
     await navigator.clipboard.writeText(lastHash);
-    copyBtn.textContent = "✅ Copiado";
-    setTimeout(()=>copyBtn.textContent="📋 Copiar solo hash",1500);
+    copyBtn.textContent = "✅";
+    setTimeout(()=>copyBtn.textContent="📋",1500);
   } catch {
     const temp=document.createElement("textarea");
     temp.value=lastHash;
@@ -153,9 +189,55 @@ copyBtn.addEventListener('click', async () => {
     temp.select();
     document.execCommand("copy");
     temp.remove();
-    copyBtn.textContent = "✅ Copiado";
-    setTimeout(()=>copyBtn.textContent="📋 Copiar solo hash",1500);
+    copyBtn.textContent = "✅";
+    setTimeout(()=>copyBtn.textContent="📋",1500);
   }
+});
+
+// ➕ Guardar manualmente en log
+saveBtn.addEventListener('click', () => {
+  if (!lastInput || !lastHash) return alert("Primero genera un hash.");
+  const exists = history.some(h => h.input === lastInput && h.output === lastHash);
+  if (exists) {
+    alert("Ya existe este registro en el log.");
+    return;
+  }
+  history.push({ input: lastInput, output: lastHash });
+  saveHistory();
+  renderHistory();
+  alert("Guardado en el log.");
+});
+
+// 🧾 Mostrar u ocultar log
+showLogBtn.addEventListener('click',()=>{
+  if (logEl.hidden) {
+    renderHistory();
+    logEl.hidden=false;
+    showLogBtn.textContent="❌ Ocultar log";
+  } else {
+    logEl.hidden=true;
+    showLogBtn.textContent="🧾 Ver log";
+  }
+});
+
+// 🗑️ Limpiar log
+clearLogBtn.addEventListener('click',()=>{
+  if (confirm("¿Borrar todo el historial de hashes?")) {
+    history=[];
+    saveHistory();
+    renderHistory();
+  }
+});
+
+// 💾 Exportar log como .txt
+exportLogBtn.addEventListener('click', () => {
+  if (history.length === 0) return alert("No hay registros para exportar.");
+  const content = history.map(h => `${h.input} → ${h.output}`).join('\n');
+  const blob = new Blob([content], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "hash_log.txt";
+  a.click();
 });
 </script>
 </body>
